@@ -1,0 +1,152 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: kubewards.kubeward.kubeward
+spec:
+  group: kubeward.kubeward
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                kprobe:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                kretprobe:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+  scope: Cluster
+  names:
+    plural: kubewards
+    singular: kubeward
+    kind: KubeWard
+    shortNames:
+      - kw
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubeward
+  labels:
+    istio-injection: disabled # Istio 사이드카 인젝션 방지
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: privileged
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: kubeward
+  name: kubeward-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeward-cr
+rules:
+- apiGroups: ["*"]
+  verbs: ["*"]
+  resources: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubeward-rb
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeward-cr
+subjects:
+- kind: ServiceAccount
+  namespace: kubeward
+  name: kubeward-sa
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: kubeward
+  name: kubeward
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubeward
+  template:
+    metadata:
+      labels:
+        app: kubeward
+    spec:
+      serviceAccountName: kubeward-sa
+      containers:
+      - name: kubeward
+        image: boanlab/kubeward:v1.0
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+              - NET_ADMIN
+              - SYS_MODULE
+              - SYS_PTRACE
+              - ALL
+        volumeMounts:
+          - name: host-root
+            mountPath: /host
+            readOnly: false
+          - name: host-dev
+            mountPath: /dev
+            readOnly: false
+          - name: host-proc
+            mountPath: /proc
+            readOnly: false
+          - name: host-sys
+            mountPath: /sys
+            readOnly: false
+          - name: containerd-socket
+            mountPath: /run/containerd/containerd.sock
+      volumes:
+        - name: host-root
+          hostPath:
+            path: /
+            type: Directory
+        - name: host-dev
+          hostPath:
+            path: /dev
+            type: Directory
+        - name: host-proc
+          hostPath:
+            path: /proc
+            type: Directory
+        - name: host-sys
+          hostPath:
+            path: /sys
+            type: Directory
+        - name: containerd-socket
+          hostPath:
+            path: /run/containerd/containerd.sock
+            type: Socket
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        fsGroup: 0
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      hostNetwork: true
+      hostPID: true
+      hostIPC: true
