@@ -1,0 +1,6 @@
+[submodule "KubeWard/BPF/cfile/xdp-tools"]
+	path = KubeWard/BPF/cfile/xdp-tools
+	url = https://github.com/xdp-project/xdp-tools/
+[submodule "KubeWard/BPF/cfile/libbpf"]
+	path = KubeWard/BPF/cfile/libbpf
+	url = https://github.com/libbpf/libbpf/
